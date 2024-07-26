@@ -300,6 +300,41 @@ function _mint() public virtual returns(bool ){
 
 
 
+function _mint(address _to, uint256 _amount) public virtual returns(bool ){
+    assembly{
+        //check if address is non zero
+        if iszero(_to){
+            mstore(0x00,_RECIPIENT_ZERO_SELECTOR)
+            revert(0x00,0x04)
+        }
+        let supply := sload(_supply.slot)
+        let newSupply := add(supply, _amount)
+        // check for overflow
+        if lt(newSupply, supply){
+            mstore(0x00,_OVERFLOW_SELECTOR)
+            revert(0x00,0x04)
+        }
+        // update the stoarge value with new value 
+        sstore(_supply.slot,newSupply)
+        mstore(0x00,_to)
+        mstore(0x20,_balances.slot)
+        // slot where the balance is saved
+        let srcTo := keccak256(0x00,0x40)
+        let srcBal := sload(srcTo)
+        let newBalance := add(srcBal,_amount)
+        // check for overflow 
+        if lt(newBalance,srcBal){
+            mstore(0x00,_OVERFLOW_SELECTOR)
+            revert(0x00,0x04)
+        }
+        sstore(dstSlot,newBalance)
+        // Emit a Transfer event from the zero address to indicate tokens were minted.
+        mstore(0x00, _amount)
+        log3(0x00, 0x20, _TRANSFER_HASH, 0x00, _to, _amount)
+
+    }
+}
+
 
 
 
