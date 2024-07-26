@@ -75,14 +75,15 @@ assembly{
         revert(0x00, 0x04)
     }
 }
+
 // compute domain separator
 bytes32 initialDomainSeparator = _computeDomainSeparator(
     keccak256(nameX)
 );
 
 // setting the storage variables
-_name = name_;
-_symbol = symbol_;
+_name = bytes32(nameX);
+_symbol = bytes32(symbolX);
 _initialChainId = block.chainid;
 _initialDomainSeparator = initialDomainSeparator;
 _nameLen = nameLen;
@@ -103,7 +104,7 @@ function transfer(address _to, uint _value) public virtual returns(bool success)
         mstore(0x00, caller()) 
         mstore(0x20,0x00) // stores 0x00 at 0x20 location 
         let srcSender :=  keccak256(0x00,0x40)
-        let balSender := slaod(srcSender)
+        let balSender := sload(srcSender)
         // checking for sufficient balance
         if lt(balSender,_value){
             mstore(0x00,_INSUFFICIENT_BALANCE)
@@ -139,7 +140,7 @@ assembly{
      mstore(0x20,keccak256(0x00,0x40) )
      mstore(0x00,caller())
      let srcAllowance := keccak256(0x00,0x40)
-     let balAllowance := sload(srcSender)
+     let balAllowance := sload(srcAllowance)
     // check for sufficient funds
      if lt(balAllowance,_MAX){
         if lt(balAllowance,_value){
@@ -230,7 +231,7 @@ function baalanceOf(address _to) public virtual returns (uint256 _value){
             mstore(0x20,0x00)
             let srcReceipt := keccak256(0x00,0x40)
             // load the amount and retrun 
-            _value := slaod(srcReceipt)
+            _value := sload(srcReceipt)
 
         }
 
@@ -245,9 +246,8 @@ function nonces(address _to) public virtual returns(uint256 _nonceValue){
         //  get storage slot of the nonce from address
         mstore(0x00,_to)
         mstore(0x20,0x03)
-        let srcReceipt := mstore(0x00,0x40)
         // load and return the nonce value
-        _nonceValue := sload(srcReceipt)
+        _nonceValue := sload(keccak256(0x00,0x40))
     }
 }
 
@@ -256,13 +256,13 @@ function nonces(address _to) public virtual returns(uint256 _nonceValue){
 function totalSupply() public virtual returns(uint256 _totalSupply){
     assembly{
         // load value from 0x03 storage slot 
-        _totalSupply := slaod(0x02)
+        _totalSupply := sload(0x02)
     }
 }
 
-function name() public virtual returns(string memory _name){
-    bytes memory nameTemp;
-    uint256 nameLenTemp ;
+function name() public virtual returns(string memory value){
+    bytes32 nameTemp = _name;
+    uint256 nameLenTemp = _symbolLen ;
     assembly{
         // load the memory location available for storing in memory
         value := mload(0x40)
@@ -276,7 +276,7 @@ function name() public virtual returns(string memory _name){
 }
 
 function symbol() public virtual returns(uint256 value){
-    bytes memory symbolTemp = _symbol ;
+    bytes32  symbolTemp = _symbol ;
     uint256 symbolLenTemp = _symbolLen;
     assembly{
     // loads the free memory location where data can be stored
@@ -286,7 +286,7 @@ function symbol() public virtual returns(uint256 value){
       // storing the value of symbol in memory slot just after the stored length of symbol
       mstore(add(value,0x20),symbolTemp)
       // updating the value of free memory pointer 
-      mstore(add(0x40,add(0x40,value)))
+      mstore(0x40,add(0x40,value))
     }
 }
 
@@ -294,13 +294,7 @@ function decimal() public virtual returns(uint256 ){
     return 18;
 }
 
-function _mint() public virtual returns(bool ){
-
-}
-
-
-
-function _mint(address _to, uint256 _amount) public virtual returns(bool ){
+function _mint(address _to, uint256 _amount) public virtual returns( bool success){
     assembly{
         //check if address is non zero
         if iszero(_to){
@@ -327,18 +321,61 @@ function _mint(address _to, uint256 _amount) public virtual returns(bool ){
             mstore(0x00,_OVERFLOW_SELECTOR)
             revert(0x00,0x04)
         }
-        sstore(dstSlot,newBalance)
+        sstore(srcTo,newBalance)
         // Emit a Transfer event from the zero address to indicate tokens were minted.
         mstore(0x00, _amount)
-        log3(0x00, 0x20, _TRANSFER_HASH, 0x00, _to, _amount)
+        log3(0x00, 0x20, _TRANSFER_HASH, _to, _amount)
+        success := 0x01
 
     }
 }
 
+function _burn(address _src, uint256 _amount) internal virtual {
+    assembly {
+        // Check the balance of the source address to ensure it has enough tokens to burn.
+        mstore(0x00, _src)
+        mstore(0x20, _balances.slot)
+        let srcSlot := keccak256(0x00, 0x40)
+        let srcBalance := sload(srcSlot)
 
+        if lt(srcBalance, _amount) {
+            mstore(0x00, _INSUFFICIENT_BALANCE)
+            revert(0x00, 0x04)
+        }
+        // Deduct the amount from the source address's balance.
+        sstore(srcSlot, sub(srcBalance, _amount))
+        // Reduce the total supply by the amount burned.
+        let supply := sload(_supply.slot)
+        sstore(_supply.slot, sub(supply, _amount))
+        // Emit a Transfer event with the destination address as the zero address to indicate burning.
+        mstore(0x00, _amount)
+        log3(0x00, 0x20, _TRANSFER_HASH, _src, _amount)
+    }
+}
 
+// solhint-disable-next-line func-name-mixedcase
+function DOMAIN_SEPARATOR() public view virtual returns (bytes32) {
+    return
+        block.chainid == _initialChainId
+            ? _initialDomainSeparator
+            : _computeDomainSeparator(keccak256(abi.encode(_name)));
+}
 
-
-
+function _computeDomainSeparator(bytes32 nameHash)
+    public
+    view virtual 
+    returns (bytes32 domainSeparator)
+{
+    assembly {
+        let memptr := mload(0x40) // Load the free memory pointer.
+        mstore(memptr, _EIP712_DOMAIN_PREFIX_HASH) // EIP-712 domain prefix hash.
+        mstore(add(memptr, 0x20), nameHash) // Token name hash.
+        mstore(add(memptr, 0x40), _VERSION_1_HASH) // Version hash ("1").
+        mstore(add(memptr, 0x60), chainid()) // Current chain ID.
+        mstore(add(memptr, 0x80), address()) // Contract address.
+        // Compute the EIP-712 domain separator.
+        domainSeparator := keccak256(memptr, 0xA0)
+    }
+}
 
 }
