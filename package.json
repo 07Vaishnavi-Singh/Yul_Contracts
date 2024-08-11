@@ -1,0 +1,18 @@
+{
+  "dependencies": {
+    "hardhat": "^2.22.8",
+    "harhdat": "^1.0.1"
+  },
+  "name": "yul_contracts",
+  "version": "1.0.0",
+  "description": "### ---- Work in progress-----",
+  "main": "index.js",
+  "devDependencies": {
+    "mocha": "^10.7.3"
+  },
+  "scripts": {
+    "test": "mocha"
+  },
+  "author": "",
+  "license": "ISC"
+}

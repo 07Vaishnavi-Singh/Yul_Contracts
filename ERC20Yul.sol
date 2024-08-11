@@ -5,20 +5,16 @@ pragma solidity ^0.8.0;
 
 contract ERC20Yul{
 
-
-
-// internal and constant -> makes them immutable - security 
-//                          and        constant - saves gas than storing it in storage 
-
-// 32 bytes keccak hash of event selectors 
 // The full 32-byte Keccak-256 hash uniquely identifies the event type.
-// Even if different contracts emit events with the same signature string,
 // the full hash ensures that the event can be uniquely identified
+// entire keccak256 of the event is used in the abi 
 bytes32 internal constant  _TRANSFER_HASH  = 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef ;
 bytes32 internal constant  _APPROVAL_HASH = 0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925 ;
 
 // 4 bytes selectors of ERROR strings -> padded to 32 bytes   
 // padded for easy storage access
+// error messages
+// keccac256(InsufficientBalance())
 bytes32 internal constant  _INSUFFICIENT_BALANCE = 0xf4d678b800000000000000000000000000000000000000000000000000000000 ;
 bytes32 internal constant _INSUFFICIENT_ALLOWANCE_SELECTOR = 0x13be252b00000000000000000000000000000000000000000000000000000000;
 bytes32 internal constant _RECIPIENT_ZERO_SELECTOR = 0x4c131ee600000000000000000000000000000000000000000000000000000000;
@@ -28,8 +24,8 @@ bytes32 internal constant _STRING_TOO_LONG_SELECTOR = 0xb11b2ad80000000000000000
 bytes32 internal constant _OVERFLOW_SELECTOR = 0x35278d1200000000000000000000000000000000000000000000000000000000;
 
 // _MAX amount value 
+// maximum value that can be stored in uni256 in decimal 
 bytes32 internal constant _MAX = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
-
 
 // EIP 712 
 bytes32 internal constant _EIP712_DOMAIN_PREFIX_HASH = 0x8b73c3c69bb8fe3d512ecc4cf759cc79239f7b179b0ffacaa9a75d522b39400f;
@@ -123,7 +119,6 @@ function transfer(address _to, uint _value) public virtual returns(bool success)
         log3(0x00,0x20,_TRANSFER_HASH,caller(),_to)
         // returns true
         success := 0x01 
-
     }
 }
 
@@ -184,9 +179,13 @@ function approve(address _to, uint256 _value) public virtual returns(bool succes
             revert(0x00,0x04)
          }
          // set approval 
+         // stores caller address at 0x00
         mstore(0x00, caller())
-        mstore(0x020, 0x01)
+        // stores 0x01 sat 0x20
+        mstore(0x20, 0x01)
+        // stores the value that approval of _from 
         mstore(0x20, keccak256(0x00,0x40))
+        // stores the address of _to at 0x00 
         mstore(0x00,_to)
         sstore(keccak256(0x00,0x40),_value)
         // emit approval event 
@@ -217,7 +216,6 @@ function allowance(address _from ,address _to) public virtual returns(uint256 _v
 
     }
 }
-
 
 function baalanceOf(address _to) public virtual returns (uint256 _value){
 
